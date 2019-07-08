@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<head i18n-values="dir:textdirection;">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta charset="utf-8" />
+    <title>Android System Trace</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+        
+        body {
+            -webkit-flex-direction: column;
+            display: -webkit-flex;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body>tr-ui-timeline-view {
+            -webkit-flex: 1 1 auto;
+            min-height: 0;
+        }
+        
+        body>tr-ui-timeline-view:focus {
+            outline: none;
+        }
+    </style>
+    {{SYSTRACE_TRACE_VIEWER_HTML}}
+</head>
+
+
+<body>
+    <tr-ui-timeline-view>
+        <track-view-container id='track_view_container'></track-view-container>
+    </tr-ui-timeline-view>
+    <script>
+        var powerlogs = [];
+        var powertimestampStart = [];
+        var powertimestamps = [];
+        var minPowerData = []
+        var V = []
+        var I = []
+        var E = []
+    </script>
+    <script>
+        'use strict';
+        var timelineViewEl;
+
+        function onLoad() {
+            timelineViewEl = document.querySelector('tr-ui-timeline-view');
+            timelineViewEl.globalMode = true;
+
+            var traceDataEls = document.body.querySelectorAll('.trace-data');
+            var traces = [];
+
+            for (var i = 0; i < traceDataEls.length; i++) {
+
+                var traceText = traceDataEls[i].textContent;
+                var tracelogs = [];
+                traceText = traceText.substring(1);
+                if (powerlogs.length == 0) {
+                    tracelogs = traceText.split(/\r\n|\r|\n/);
+                    powerlogs = tracelogs.filter(function(item) {
+                        var finder = "write_power_ringbuffer";
+                        return eval('/' + finder + '/').test(item);
+                    });
+                }
+                if (powerlogs.length != 0) {
+                    var linenumber = 0;
+                    var index = 0;
+                    var startindex = 0;
+                    for (var i = 0; i < tracelogs.length; i++) {
+                        if (tracelogs[i].includes("[")) {
+                            linenumber = i;
+                            break;
+                        }
+                    }
+                    console.log("tracelogss")
+                    console.log(tracelogs[linenumber])
+                    for (var i = 0; i < tracelogs[linenumber].length; i++) {
+                        if (tracelogs[linenumber + 2][i] == ':') {
+                            index = i - 1;
+                            break;
+                        }
+                    }
+                    for (var i = index; i >= 0; i--) {
+                        if (tracelogs[linenumber][i] == ' ' && parseFloat(tracelogs[linenumber][i + 1]) > 0) {
+                            startindex = i + 1;
+                            break;
+                        }
+                    }
+                    powertimestampStart.push(parseFloat(tracelogs[linenumber].substring(startindex, index)));
+                }
+                tracelogs = []
+                    // Remove the leading newline.
+                traces.push(traceText);
+            }
+
+            var m = new tr.Model();
+            var i = new tr.importer.Import(m);
+            var p = i.importTracesWithProgressDialog(traces, powerlogs);
+            p.then(
+                function() {
+                    timelineViewEl.model = m;
+                    timelineViewEl.updateDocumentFavicon();
+                    timelineViewEl.globalMode = true;
+                    timelineViewEl.viewTitle = 'Android System Trace';
+                },
+                function(err) {
+                    var overlay = new tr.ui.b.Overlay();
+                    overlay.textContent = tr.b.normalizeException(err).message;
+                    overlay.title = 'Import error';
+                    overlay.visible = true;
+                });
+        }
+        window.addEventListener('load', onLoad);
+    </script>
